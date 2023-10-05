@@ -1,7 +1,11 @@
+require('dotenv').config()
 const express = require('express')
 const app = express()
+const People = require('./models/person')
 const cors = require('cors')
 const morgan = require('morgan')
+
+
 app.use(express.static('dist'))
 app.use(express.json())
 app.use(cors())
@@ -35,65 +39,70 @@ let persons = [
     }
 ]
 
+const errorHandler = (error, request, response, next) => {
+    if (error.name === 'CastError') {
+        return response.status(400).send({ error: 'malformatted id'})
+    }else if (error.name === 'ValidationError') {
+        return response.status(400).json({error: error.message})
+    }
+    next(error)
+}
+app.use(errorHandler)
+
 
 app.get('/api/persons', (request, response) => {
-    response.json(persons)
+    People.find({}).then(person => {
+        response.json(person)
+    })
 })
 
-app.get('/info', (request, response) => {
-    const len = persons.length
+app.get('/info',async (request, response) => {
+    const len = await People.countDocuments()
     const aika = new Date()
     response.send('Phonebook has info for ' + len + ' people' + '<p>' + aika + '</p>')
 })
 
-app.get('/api/persons/:id', (request, response) => {
-    const id = Number(request.params.id)
-    const person = persons.find(person => person.id === id)
-    
-    if (person) {
-        response.json(person)
-    } else {
-        response.status(404).end()
-    }
+app.get('/api/persons/:id', (request, response, next) => {
+    People.findById(request.params.id)
+    .then(person => {response.json(person)})
+    .catch(error => next(error))
 })
 
-app.delete('/api/persons/:id', (request, response) => {
-    const id = Number(request.params.id)
-    persons = persons.filter(person => person.id !== id)
 
-    response.status(204).end()
+app.delete('/api/persons/:id', (request, response, next) => {
+    People.findByIdAndRemove(request.params.id)
+    .then(result=>{response.status(204).end()})
+    .catch(error => next(error))
+
+
 })
 
-const generateId = () => {
-    const maxId = persons.length > 0
-        ? Math.max(...persons.map(n => n.id))
-        : 0
-    return maxId + 1
-}
+app.post('/api/persons', (request, response, next) => {
+    const body = request.body
 
-app.post('/api/persons', (request, response) => {
-    const person = request.body
-    const found = persons.find(n => n.name === person.name)
+    const personObject = new People ({
+        name: body.name,
+        number: body.number
+    })
 
-    if (!person.name || !person.number) {
-        return response.status(400).json({ error: 'name or number missing'})
-    }
-    
-    if (found) {
-        return response.status(400).json({ error: 'name must be unique'})
-    }
+    personObject.save().then(saved => {
+        response.json(saved)
+    }).catch(error => { next(error)})
 
-    const personObject = {
-        id: generateId(),
-        name: person.name,
-        number: person.number
-    }
-
-    persons = persons.concat(personObject)
-    response.json(personObject)
 })
 
-const PORT = process.env.PORT || 3001
+app.put('/api/persons/:id', (request, response, next) => {
+    const body = request.body
+    const person = {
+        name: body.name,
+        number: body.number
+    }
+    People.findByIdAndUpdate(request.params.id, person, {new: true})
+    .then(result => {response.json(result)})
+    .catch(error => next(error))
+})
+
+const PORT = process.env.PORT
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`)
 })
