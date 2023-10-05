@@ -1,1 +1,1 @@
-Linkki: https://puhelinluettelo-zzzd.onrender.com/api/persons
+Linkki: https://puhelinluettelo-zzzd.onrender.com
